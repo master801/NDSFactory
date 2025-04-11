@@ -1,12 +1,112 @@
 {
-  "version": 2,
+  "version": 3,
   "configurePresets": [
     {
+      "hidden": true,
       "name": "default",
       "inherits": "vcpkg",
       "environment": {
-        "VCPKG_ROOT": "D:\\Tools\\vcpkg"
+        "VCPKG_ROOT": "D:/Tools/vcpkg"
+      }
+    },
+    {
+      "name": "CLI-Debug",
+      "inherits": "vcpkg",
+      "binaryDir": "${sourceDir}/out/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      },
+      "environment": {
+        "VCPKG_ROOT": "D:/Tools/vcpkg"
+      }
+    },
+    {
+      "name": "CLI-Release",
+      "inherits": "vcpkg",
+      "binaryDir": "${sourceDir}/out/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "environment": {
+        "VCPKG_ROOT": "D:/Tools/vcpkg"
+      }
+    },
+    {
+      "hidden": true,
+      "name": "6.7.2_msvc2019_64",
+      "inherits": "Qt",
+      "architecture": {
+        "strategy": "external",
+        "value": "x64"
+      },
+      "generator": "Ninja",
+      "vendor": {
+        "qt-project.org/Version": {
+          "checksum": "Bix3VTiu0VJT9MULsciS2xuiRSY="
+        }
+      }
+    },
+    {
+      "hidden": true,
+      "name": "Qt-Default",
+      "inherits": [
+        "vcpkg",
+        "6.7.2_msvc2019_64"
+      ],
+      "vendor": {
+        "qt-project.org/Default": {
+          "checksum": "gw/ERk1cQwC3YNpVspzQ2Sww4Qk="
+        }
+      }
+    },
+    {
+      "name": "Qt-Debug",
+      "inherits": "Qt-Default",
+      "binaryDir": "${sourceDir}/out/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "-DQT_QML_DEBUG"
+      },
+      "environment": {
+        "VCPKG_ROOT": "D:/Tools/vcpkg",
+        "QML_DEBUG_ARGS": "-qmljsdebugger=file:{f93ee848-589e-4ca8-9f00-8ec9e59822e9},block",
+        "QT_QPA_PLATFORM_PLUGIN_PATH": "${sourceDir}/out/build/vcpkg_installed/x64-windows/debug/Qt6/plugins/platforms"
+      }
+    },
+    {
+      "name": "Qt-Release",
+      "inherits": "Qt-Default",
+      "binaryDir": "${sourceDir}/out/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "environment": {
+        "VCPKG_ROOT": "D:/Tools/vcpkg",
+        "QT_QPA_PLATFORM_PLUGIN_PATH": "${sourceDir}/out/build/vcpkg_installed/x64-windows/Qt6/plugins/platforms"
+      }
+    },
+    {
+      "hidden": true,
+      "name": "QtDesignStudio_qt6_design_studio_reduced_version",
+      "inherits": "Qt",
+      "environment": {
+        "QTDIR": "C:/Qt/Tools/QtDesignStudio/qt6_design_studio_reduced_version"
+      },
+      "architecture": {
+        "strategy": "external",
+        "value": "x64"
+      },
+      "generator": "Ninja",
+      "vendor": {
+        "qt-project.org/Version": {
+          "checksum": "ygR+cS5HulD9XNDRlzjWPEl2jZo="
+        }
       }
     }
-  ]
+  ],
+  "vendor": {
+    "qt-project.org/Presets": {
+      "checksum": "Uup2yLzTIsD1yvrCY3TjhVEtXMo="
+    }
+  }
 }

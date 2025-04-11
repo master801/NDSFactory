@@ -13,7 +13,7 @@ find_package(Qt6 REQUIRED COMPONENTS
 )
 
 # Include sanitizers
-include(${CMAKE_SOURCE_DIR}/cmake/sanitizers.cmake)
+include("${CMAKE_SOURCE_DIR}/cmake/sanitizers.cmake")
 
 # Determine the Git commit hash if in a git repository
 if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
@@ -27,31 +27,32 @@ else()
   set(GIT_COMMIT_HASH "")
 endif()
 
+# Configure the revision header file
 configure_file(
-  ${CMAKE_SOURCE_DIR}/ui/dialogs/about/revision.h.in
-  ${CMAKE_SOURCE_DIR}/ui/dialogs/about/revision.h
+  "${CMAKE_SOURCE_DIR}/ui/dialogs/about/revision.h.in"
+  "${CMAKE_SOURCE_DIR}/ui/dialogs/about/revision.h"
 )
 
 # Collect source and header files
 ## Dialogs
-file(GLOB_RECURSE DIALOGS_HEADERS ui/dialogs/*.h)
-file(GLOB_RECURSE DIALOGS_SOURCES ui/dialogs/*.cpp)
-file(GLOB_RECURSE DIALOGS_UIS ui/dialogs/*.ui)
+file(GLOB_RECURSE DIALOGS_HEADERS "ui/dialogs/*.h")
+file(GLOB_RECURSE DIALOGS_SOURCES "ui/dialogs/*.cpp")
+file(GLOB_RECURSE DIALOGS_UIS "ui/dialogs/*.ui")
 
 ## Tabs
-file(GLOB_RECURSE TABS_HEADERS ui/tabs/*.h)
-file(GLOB_RECURSE TABS_SOURCES ui/tabs/*.cpp)
+file(GLOB_RECURSE TABS_HEADERS "ui/tabs/*.h")
+file(GLOB_RECURSE TABS_SOURCES "ui/tabs/*.cpp")
 
 ## Models
-file(GLOB_RECURSE MODELS_HEADERS ui/models/*.h)
-file(GLOB_RECURSE MODELS_SOURCES ui/models/*.cpp)
+file(GLOB_RECURSE MODELS_HEADERS "ui/models/*.h")
+file(GLOB_RECURSE MODELS_SOURCES "ui/models/*.cpp")
 
 ## Utils
-file(GLOB_RECURSE UTILS_HEADERS ui/utils/*.h)
+file(GLOB_RECURSE UTILS_HEADERS "ui/utils/*.h")
 
 ## NDSFactory
-file(GLOB_RECURSE NDSFACTORY_SOURCES ndsfactory/*.cpp)
-file(GLOB_RECURSE NDSFACTORY_HEADERS ndsfactory/*.h)
+file(GLOB_RECURSE NDSFACTORY_SOURCES "ndsfactory/*.cpp")
+file(GLOB_RECURSE NDSFACTORY_HEADERS "ndsfactory/*.h")
 
 set(SOURCES_CLI
     "main_cli.cpp"
@@ -74,6 +75,11 @@ set(HEADERS_GUI
     ${MODELS_HEADERS}
     ${DIALOGS_HEADERS}
     ${UTILS_HEADERS}
+)
+
+set(FORMS
+    ui/mainwindow.ui
+    ${DIALOGS_UIS}
 )
 
 # CLI
@@ -130,3 +136,11 @@ target_link_libraries(NDSFactory_GUI PRIVATE
     Qt6::Gui
     Qt6::Widgets
 )
+
+message(STATUS "BUILD PATH: ${CMAKE_CURRENT_BINARY_DIR}")
+
+#add_custom_command(TARGET NDSFactory_GUI POST_BUILD
+#    COMMAND ${CMAKE_COMMAND} -E echo "Deploying QT Release build...."
+#    COMMAND "${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/x64-windows/tools/Qt6/bin/windeployqt.exe"
+#    ARGS --plugindir "${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/x64-windows/Qt6/plugins" "${OUTPUT_NAME}"
+#)
