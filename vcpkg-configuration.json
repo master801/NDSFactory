@@ -1,0 +1,22 @@
+{
+  "registries": [
+    {
+      "kind": "git",
+      "baseline": "3704806ffed769fc3260b2ef7fd39b8b65f638ea",
+      "repository": "https://github.com/microsoft/vcpkg",
+      "packages": [
+        "qtbase"
+      ]
+    },
+    {
+      "kind": "artifact",
+      "location": "https://github.com/microsoft/vcpkg-ce-catalog/archive/refs/heads/main.zip",
+      "name": "microsoft"
+    }
+  ],
+  "default-registry": {
+    "kind": "git",
+    "baseline": "735bf69da87e122e291ee1e0f8279247a005b9c4",
+    "repository": "https://github.com/microsoft/vcpkg"
+  }
+}

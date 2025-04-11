@@ -3,7 +3,7 @@
 #include <QStyleFactory>
 #include "ui/utils/theme.h"
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     QApplication::setStyle(QStyleFactory::create("Fusion"));
     QApplication app(argc, argv);
@@ -11,9 +11,9 @@ int main(int argc, char *argv[])
     app.setOrganizationName("NDSFactory");
 
     QString theme = getCurrentTheme();
-    if(theme == "dark")
-		setDarkTheme(app);
-	else if(theme == "light")
+    if (theme == "dark")
+        setDarkTheme(app);
+    else if (theme == "light")
         setLightTheme(app);
 
     MainWindow mainWindow;

@@ -1,9 +1,16 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 4.0.0)
 
-project(NDSFactory)
+project(NDSFactory LANGUAGES CXX)
 
-# Require Qt6 components
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+find_package(Boost REQUIRED COMPONENTS
+    program_options
+)
+
+find_package(Qt6 REQUIRED COMPONENTS
+    Core
+    Gui
+    Widgets
+)
 
 # Include sanitizers
 include(${CMAKE_SOURCE_DIR}/cmake/sanitizers.cmake)
@@ -20,7 +27,6 @@ else()
   set(GIT_COMMIT_HASH "")
 endif()
 
-# Configure the revision header file
 configure_file(
   ${CMAKE_SOURCE_DIR}/ui/dialogs/about/revision.h.in
   ${CMAKE_SOURCE_DIR}/ui/dialogs/about/revision.h
@@ -47,17 +53,22 @@ file(GLOB_RECURSE UTILS_HEADERS ui/utils/*.h)
 file(GLOB_RECURSE NDSFACTORY_SOURCES ndsfactory/*.cpp)
 file(GLOB_RECURSE NDSFACTORY_HEADERS ndsfactory/*.h)
 
-set(SOURCES
-    main.cpp
-    ui/mainwindow.cpp
+set(SOURCES_CLI
+    "main_cli.cpp"
+    ${NDSFACTORY_SOURCES}
+)
+
+set(SOURCES_GUI
+    "main_gui.cpp"
+    "ui/mainwindow.cpp"
     ${NDSFACTORY_SOURCES}
     ${DIALOGS_SOURCES}
     ${MODELS_SOURCES}
     ${TABS_SOURCES}
 )
 
-SET(HEADERS
-    ui/mainwindow.h
+set(HEADERS_GUI
+    "ui/mainwindow.h"
     ${NDSFACTORY_HEADERS}
     ${TABS_HEADERS}
     ${MODELS_HEADERS}
@@ -65,41 +76,57 @@ SET(HEADERS
     ${UTILS_HEADERS}
 )
 
-set(FORMS
-    ui/mainwindow.ui
-    ${DIALOGS_UIS}
-)
+# CLI
+add_executable(NDSFactory_CLI ${SOURCES_CLI} ${NDSFACTORY_HEADERS})
 
 # Platform-specific executable creation
 if(APPLE)
     set(MACOSX_BUNDLE_ICON_FILE ndsfactory.icns)
     set(MACOS_ICNS "res/ndsfactory.icns")
     set_source_files_properties(${MACOS_ICNS} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
-    add_executable(${PROJECT_NAME} MACOSX_BUNDLE ${SOURCES} ${HEADERS} ${FORMS} ${MACOS_ICNS})
+    add_executable(NDSFactory_GUI MACOSX_BUNDLE ${SOURCES_GUI} ${HEADERS_GUI} ${FORMS} ${MACOS_ICNS})
 elseif(WIN32)
     set(WIN32_RESOURCES "res/resources.rc")
-    add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${HEADERS} ${FORMS} ${WIN32_RESOURCES})
+    add_executable(NDSFactory_GUI WIN32 ${SOURCES_GUI} ${HEADERS_GUI} ${FORMS} ${WIN32_RESOURCES})
 else()
-    add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} ${FORMS})
+    add_executable(NDSFactory_GUI ${SOURCES_GUI} ${HEADERS_GUI} ${FORMS})
 endif()
 
-# Set C++ standard for the target
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
+# Boost features
+set(Boost_USE_STATIC_LIBS ON)
+set(Boost_USE_MULTITHREADED ON)
+set(Boost_USE_STATIC_RUNTIME OFF)
 
 # Enable Qt's automatic features for the target
-set_target_properties(${PROJECT_NAME} PROPERTIES
+set_target_properties(NDSFactory_GUI PROPERTIES
     AUTOMOC ON
     AUTOUIC ON
 )
 
-# Add compile options for different compilers
-if(MSVC)
-    target_compile_options(${PROJECT_NAME} PRIVATE /WX /W4 /EHsc)
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror)
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror)
-endif()
+function(target_compile target_name)
+    # Set C++ standard for the target
+    target_compile_features(${target_name} PUBLIC cxx_std_20)
+
+    # Add compile options for different compilers
+    if(MSVC)
+        target_compile_options(${target_name} PRIVATE /WX /W4 /EHsc)
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_options(${target_name} PRIVATE -Wall -Wextra -Werror)
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        target_compile_options(${target_name} PRIVATE -Wall -Wextra -Werror)
+    endif()
+endfunction()
+
+target_compile(NDSFactory_CLI)
+target_compile(NDSFactory_GUI)
+
+target_link_libraries(NDSFactory_CLI PRIVATE
+    Boost::program_options
+)
 
 # Link the necessary Qt6 libraries
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
+target_link_libraries(NDSFactory_GUI PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+)
