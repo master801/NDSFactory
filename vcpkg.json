@@ -1,6 +1,15 @@
 {
   "dependencies": [
-    "boost-program-options",
-    "qtbase"
+    {
+      "name": "boost-program-options"
+    },
+    {
+      "name": "qtbase",
+      "default-features": false,
+      "features": [
+        "gui",
+        "widgets"
+      ]
+    }
   ]
 }

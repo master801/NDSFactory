@@ -15,7 +15,8 @@
       "inherits": "vcpkg",
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-        "CMAKE_PREFIX_PATH": "$env{QTDIR}"
+        "CMAKE_PREFIX_PATH": "$env{QTDIR}",
+        "QT_FEATURE_doubleconversion":  "OFF"
       },
       "vendor": {
         "qt-project.org/Qt": {

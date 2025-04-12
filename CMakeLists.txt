@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.0.0)
+cmake_minimum_required(VERSION 3.30)
 
 project(NDSFactory LANGUAGES CXX)
 
@@ -78,13 +78,14 @@ set(HEADERS_GUI
 )
 
 set(FORMS
-    ui/mainwindow.ui
+    "ui/mainwindow.ui"
     ${DIALOGS_UIS}
 )
 
 # CLI
 add_executable(NDSFactory_CLI ${SOURCES_CLI} ${NDSFACTORY_HEADERS})
 
+#GUI
 # Platform-specific executable creation
 if(APPLE)
     set(MACOSX_BUNDLE_ICON_FILE ndsfactory.icns)
@@ -137,10 +138,46 @@ target_link_libraries(NDSFactory_GUI PRIVATE
     Qt6::Widgets
 )
 
-message(STATUS "BUILD PATH: ${CMAKE_CURRENT_BINARY_DIR}")
+if(EXISTS "${NDSFactory_BINARY_DIR}/qt.conf")
+    add_custom_command(TARGET NDSFactory_GUI PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove "${NDSFactory_BINARY_DIR}/qt.conf"
+    )
+endif()
+if(NOT EXISTS "${NDSFactory_BINARY_DIR}/qt.conf")
+    add_custom_command(TARGET NDSFactory_GUI PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_SOURCE_DIR}/qt.${CMAKE_BUILD_TYPE}.conf" "${NDSFactory_BINARY_DIR}/qt.conf"
+    )
+endif()
 
-#add_custom_command(TARGET NDSFactory_GUI POST_BUILD
-#    COMMAND ${CMAKE_COMMAND} -E echo "Deploying QT Release build...."
-#    COMMAND "${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/x64-windows/tools/Qt6/bin/windeployqt.exe"
-#    ARGS --plugindir "${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/x64-windows/Qt6/plugins" "${OUTPUT_NAME}"
-#)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(DEPLOY_GUI_DIR "${NDSFactory_BINARY_DIR}/deploy_gui")
+    if(EXISTS ${DEPLOY_GUI_DIR})
+        add_custom_command(TARGET NDSFactory_GUI PRE_BUILD
+            COMMAND ${CMAKE_COMMAND} -E remove_directory "${DEPLOY_GUI_DIR}"
+        )
+    endif()
+    if(NOT EXISTS ${DEPLOY_GUI_DIR})
+        if(WIN32)
+            add_custom_command(TARGET NDSFactory_GUI POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Deploying Windows Qt Release build..."
+                COMMAND ${CMAKE_COMMAND} -E make_directory ${DEPLOY_GUI_DIR}
+                COMMAND ${CMAKE_COMMAND} -E copy "${NDSFactory_BINARY_DIR}/${PROJECT_NAME}_GUI.exe" "${DEPLOY_GUI_DIR}/${PROJECT_NAME}.exe"
+                COMMAND ${WINDEPLOYQT_EXECUTABLE}
+                    ARGS --verbose 2  # For debugging
+                    ARGS --release
+                    ARGS --no-compiler-runtime --no-system-dxc-compiler
+                    ARGS --skip-plugin-types generic
+                    ARGS --exclude-plugins qgif,qjpeg  # We don't need these DLLs
+                    ARGS "${DEPLOY_GUI_DIR}/${PROJECT_NAME}.exe"
+                COMMAND ${CMAKE_COMMAND} -E echo "Done deploying"
+            )
+            # Stupid dependencies...
+            add_custom_command(TARGET NDSFactory_GUI POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy
+                "${NDSFactory_BINARY_DIR}/double-conversion.dll"
+                    "${NDSFactory_BINARY_DIR}/pcre2-16.dll"
+                    ${DEPLOY_GUI_DIR}
+            )
+        endif()
+    endif()
+endif()

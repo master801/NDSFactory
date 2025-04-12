@@ -49,10 +49,8 @@
     {
       "hidden": true,
       "name": "Qt-Default",
-      "inherits": [
-        "vcpkg",
-        "6.7.2_msvc2019_64"
-      ],
+      "inherits": "6.7.2_msvc2019_64",
+      "binaryDir": "${sourceDir}/out/build",
       "vendor": {
         "qt-project.org/Default": {
           "checksum": "gw/ERk1cQwC3YNpVspzQ2Sww4Qk="
@@ -62,27 +60,23 @@
     {
       "name": "Qt-Debug",
       "inherits": "Qt-Default",
-      "binaryDir": "${sourceDir}/out/build",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_FLAGS": "-DQT_QML_DEBUG"
       },
       "environment": {
         "VCPKG_ROOT": "D:/Tools/vcpkg",
-        "QML_DEBUG_ARGS": "-qmljsdebugger=file:{f93ee848-589e-4ca8-9f00-8ec9e59822e9},block",
-        "QT_QPA_PLATFORM_PLUGIN_PATH": "${sourceDir}/out/build/vcpkg_installed/x64-windows/debug/Qt6/plugins/platforms"
+        "QML_DEBUG_ARGS": "-qmljsdebugger=file:{f93ee848-589e-4ca8-9f00-8ec9e59822e9},block"
       }
     },
     {
       "name": "Qt-Release",
       "inherits": "Qt-Default",
-      "binaryDir": "${sourceDir}/out/build",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       },
       "environment": {
-        "VCPKG_ROOT": "D:/Tools/vcpkg",
-        "QT_QPA_PLATFORM_PLUGIN_PATH": "${sourceDir}/out/build/vcpkg_installed/x64-windows/Qt6/plugins/platforms"
+        "VCPKG_ROOT": "D:/Tools/vcpkg"
       }
     },
     {
