@@ -11,33 +11,44 @@ namespace fs = std::filesystem;
 #include <argparse/argparse.hpp>
 
 #include "ndsfactory/ndsfactory.h"
-#include "ndsfactory/ndsheader.h"
 
-static void fatToolsPatch(NDSFactory* ndsFactory)
+static void generateHeader(NDSFactory* ndsFactory, NDSHeader* ndsHeader)
 {
 }
 
-static void fatToolsBuild(NDSFactory* ndsFactory)
+static void packROM(NDSFactory* ndsFactory, fs::path pathROMOut, int pad, bool trim, fs::path fpHeader, fs::path fpARM9, fs::path fpARM7, fs::path fpFATNameTable, fs::path fpFAT, fs::path fpFATData, fs::path fpARM9Overlay, fs::path fpARM9OverlayData, fs::path fpARM7Overlay, fs::path fpARM7OverlayData, fs::path fpLogos)
 {
-}
+	std::vector<char> romHeaderBuffer(sizeof(NDSHeader));
+	NDSHeader* ndsHeader = reinterpret_cast<NDSHeader*>(romHeaderBuffer.data());
+	ndsFactory->loadRomHeader(fpHeader.string(), romHeaderBuffer);
 
-static void fatToolsDataExtract(NDSFactory* ndsFactory)
-{
-}
+	//TODO
+	if (!ndsFactory->checkArm9FooterPresence(fpARM9.string(), ndsHeader->Arm9Size))
+	{
+		std::cout << std::format("Given ARM9 file does not have a footer! Path: \"{}\"", fpARM9.string()) << std::endl;
+		std::exit(1);
+		return;
+	}
 
-static void fatTools(NDSFactory* ndsFactory)
-{
-	//fatToolsDataExtract();
-	//fatToolsBuild();
-	//fatToolsPatch();
-}
+	char padChar;
+	if (pad == 0)
+	{
+		padChar = '\x00';
+	}
+	else if (pad == 1)
+	{
+		padChar = '\xFF';
+	}
+	else
+	{
+		std::cout << std::format("Invalid pad option \"{}\"!", pad) << std::endl;
+		std::exit(2);
+		return;
+	}
+	
+	//TODO
 
-static void generateHeader(NDSHeader* ndsHeader)
-{
-}
-
-static void packROM(NDSFactory* ndsFactory, fs::path fpROMOut, int pad, bool trim, fs::path fpHeader, fs::path fpARM9, fs::path fpARM7, fs::path fpFATNameTable, fs::path fpFAT, fs::path fpFATData, fs::path fpARM9Overlay, fs::path fpARM9OverlayData, fs::path fpARM7Overlay, fs::path fpARM7OverlayData, fs::path fpLogos)
-{
+	//ndsFactory->writeBytesToFile(romHeaderBuffer, pathROMOut.string(), 0, sizeof(NDSHeader));
 }
 
 static void unpackROM(const fs::path fpROM, NDSFactory* ndsFactory, NDSHeader* ndsHeader, bool overdumpARM9, fs::path fpHeader, fs::path fpARM9, fs::path fpARM7, fs::path fpFATNameTable, fs::path fpFAT, fs::path fpFATData, fs::path fpARM9Overlay, fs::path fpARM9OverlayData, fs::path fpARM7Overlay, fs::path fpARM7OverlayData, fs::path fpLogos)
@@ -200,6 +211,7 @@ int main(int argc, char* argv[])
 		.add_argument("--arm9overdump")
 		.default_value(true)
 		.implicit_value(false)
+		.required()
 		.help("Dumps 12 extra bytes for a 1:1 file.\nEnabled by default\nUse this argument if you do not want this behavior to happen.");
 	commandUnpack
 		.add_argument("--arm7", "-a7")
@@ -243,26 +255,32 @@ int main(int argc, char* argv[])
 	commandPack
 		.add_argument("--header", "-h")
 		.metavar("<header.bin>")
+		.required()
 		.help("Header file");
 	commandPack
 		.add_argument("--arm9", "-a9")
 		.metavar("<arm9.bin>")
+		.required()
 		.help("ARM9 executable");
 	commandPack
 		.add_argument("--arm7", "-a7")
 		.metavar("<arm7.bin>")
+		.required()
 		.help("ARM7 executable");
 	commandPack
 		.add_argument("--fatnametable", "-fntbl")
 		.metavar("<fnt.bin>")
+		.required()
 		.help("FAT name table");
 	commandPack
 		.add_argument("--fat", "-f")
 		.metavar("<fat.bin>")
+		.required()
 		.help("FAT file");
 	commandPack
 		.add_argument("--fatdata", "-fd")
 		.metavar("<fat_data.bin>")
+		.required()
 		.help("FAT data file");
 	commandPack
 		.add_argument("--arm9overlay", "-a9o")
@@ -287,88 +305,115 @@ int main(int argc, char* argv[])
 	commandPack
 		.add_argument("--pad", "-p")
 		.metavar("<0 or 1>")
-		.scan<'d', int>()
-		.choices(0, 1)
 		.default_value(1)
+		.choices(0, 1)
+		.scan<'d', int>()
+		.required()
 		.help("0 to pad ROM with 0x00s\n1 to pad ROM with 0xFFs\nMost commercial ROMs are padded with 0xFF\nBy default, pads with 0xFF\n");
 	commandPack
 		.add_argument("--trim", "-t")
 		.flag()
+		.required()
 		.help("Trim ROM after packing.\nBy default, the ROM is not trimmed.\n");
 
 	argparse::ArgumentParser commandFATTools("fattools");
-	commandFATTools.add_description("Tools for modifying FAT");
-	//groupFATTools
-	//	.add_argument("--extract", "-e")
-	//	.flag()
-	//	.help("Extracts FAT data <fat_data.bin>");
-	//groupFATTools
-	//	.add_argument("--build", "-b")
-	//	.flag()
-	//	.help("Builds FAT data <fat_data.bin>");
-	//groupFATTools
-	//	.add_argument("--patch", "-p")
-	//	.flag()
-	//	.help("Patches FAT data <fat_data.bin>");
+	commandFATTools.add_description("Tools for modifying the FAT");
+	commandFATTools
+		.add_argument("extract")
+		.flag()
+		.help("Extracts FAT data <fat_data.bin>");
+	commandFATTools
+		.add_argument("build")
+		.flag()
+		.help("Builds FAT data <fat_data.bin>");
+	commandFATTools
+		.add_argument("patch")
+		.flag()
+		.help("Patches FAT data <fat_data.bin>");
 
-	//argparse::ArgumentParser& groupFATToolsExtract = groupModeArguments
-	//	.add_group("FAT Data Extract");
-	//groupFATToolsExtract
-	//	.add_argument("--fat", "-f")
-	//	.metavar("<fat.bin>")
-	//	.help("FAT bin file");
-	//groupFATToolsExtract
-	//	.add_argument("--fatdata", "-fd")
-	//	.metavar("<fat_data.bin>")
-	//	.help("FAT data bin file");
-	//groupFATToolsExtract
-	//	.add_argument("--filenametable", "-fnt")
-	//	.metavar("<fnt.bin>")
-	//	.help("FAT name table");
-	//groupFATToolsExtract
-	//	.add_argument("--fatdataaddr", "-fdadr")
-	//	//.scan<'X', int>()
-	//	.metavar("<Hex Integer>")
-	//	.help("Original address of FAT data in Hex.\nEx: 0xDEADBEEF");
-	//groupFATToolsExtract
-	//	.add_argument("--fatfileids", "-ffids")
-	//	.flag()
-	//	.help("Save file IDs to _file_IDs.txt (required for rebuilding FAT)");
+	argparse::ArgumentParser commandFATToolsExtract("extract");
+	commandFATToolsExtract
+		.add_argument("--fat", "-f")
+		.metavar("<fat.bin>")
+		.required()
+		.help("FAT bin file");
+	commandFATToolsExtract
+		.add_argument("--fatdata", "-fd")
+		.metavar("<fat_data.bin>")
+		.required()
+		.help("FAT data bin file");
+	commandFATToolsExtract
+		.add_argument("--fatnametable", "-fnt")
+		.metavar("<fnt.bin>")
+		.required()
+		.help("FAT name table");
+	commandFATToolsExtract
+		.add_argument("--fatdataaddress", "-fdaddr")
+		.scan<'X', uint32_t>()
+		.metavar("<Hex Integer>")
+		.required()
+		.help("Original address of FAT data in Hex.\nEx: 0xDEADBEEF");
+	commandFATToolsExtract
+		.add_argument("--savefatfileids", "-saveids")
+		.flag()
+		.required()
+		.help("Save file IDs to _file_IDs.txt (required for rebuilding FAT)");
+	commandFATToolsExtract
+		.add_argument("--fatdatadir", "-fats")
+		.required()
+		.help("The directory to output the extract FAT files to.");
 
-	//argparse::ArgumentParser& groupFATToolsBuilder = groupModeArguments
-	//	.add_group("FAT Data Builder");
-	//groupFATToolsBuilder
-	//	.add_argument("--fat", "-f")
-	//	.help("Original <fat.bin> file");
-	//groupFATToolsBuilder
-	//	.add_argument("--fatdatadir", "-fats")
-	//	.help("Directory where <fat_data.bin> was extracted to");
-	//groupFATToolsBuilder
-	//	.add_argument("--fatdataaddr", "-fdaddr")
-	//	//.scan<'X', int>()
-	//	.metavar("<Hex Integer>")
-	//	.help("Original address of FAT data in Hex.\nEx: 0xDEADBEEF");
+	argparse::ArgumentParser commandFATToolsBuild("build");
+	commandFATToolsBuild
+		.add_argument("--fat", "-f")
+		.metavar("<fat.bin>")
+		.help("Original <fat.bin> file\nOnly required if the ROM uses overlays");
+	commandFATToolsBuild
+		.add_argument("--fatdatadir", "-fats")
+		.metavar("<fat_data.bin>")
+		.required()
+		.help("Directory where <fat_data.bin> was extracted to");
+	commandFATToolsBuild
+		.add_argument("--fatdataaddress", "-fdaddr")
+		.scan<'X', uint32_t>()
+		.metavar("<Hex Integer>")
+		.required()
+		.help("Original address of FAT data in Hex.\nEx: 0xDEADBEEF");
+	commandFATToolsBuild
+		.add_argument("--fatout", "-fo")
+		.required()
+		.help("File to write the rebuilt <fat.bin>");
 
-	//argparse::ArgumentParser& groupFATToolsPatcher = groupModeArguments
-	//	.add_group("FAT Data Patcher");
-	//groupFATToolsPatcher
-	//	.add_argument("--fat", "-f")
-	//	.metavar("<fat.bin>")
-	//	.help("FAT bin file to patch");
-	//groupFATToolsPatcher
-	//	.add_argument("--originalfatdataaddr", "-ofdaddr")
-	//	//.scan<'X', int>()
-	//	.metavar("<Hex Integer>")
-	//	.help("Original address of the FAT Data in Hex.\nEx: 0xDEADBEEF");
-	//groupFATToolsPatcher
-	//	.add_argument("--newfatdataaddr", "-nfdaddr")
-	//	//.scan<'X', int>()
-	//	.metavar("<Hex Integer>")
-	//	.help("New address of the FAT Data in Hex.\nEx: 0xDEADBEEF");
+	argparse::ArgumentParser commandFATToolsPatcher("patch");
+	commandFATToolsPatcher
+		.add_argument("--fat", "-f")
+		.required()
+		.metavar("<fat.bin>")
+		.help("FAT bin file to patch");
+	commandFATToolsPatcher
+		.add_argument("--originalfatdataaddr", "-ofdaddr")
+		.scan<'X', uint32_t>()
+		.required()
+		.metavar("<Hex Integer>")
+		.help("Original address of the FAT Data in Hex.\nEx: 0xDEADBEEF");
+	commandFATToolsPatcher
+		.add_argument("--newfatdataaddr", "-nfdaddr")
+		.scan<'X', uint32_t>()
+		.required()
+		.metavar("<Hex Integer>")
+		.help("New address of the FAT Data in Hex.\nEx: 0xDEADBEEF");
+	commandFATToolsPatcher
+		.add_argument("--newfat", "-nf")
+		.required()
+		.metavar("<fat.new.bin>")
+		.help("The new patched FAT bin file");
 
 	program.add_subparser(commandUnpack);
 	program.add_subparser(commandPack);
 	program.add_subparser(commandFATTools);
+	commandFATTools.add_subparser(commandFATToolsExtract);
+	commandFATTools.add_subparser(commandFATToolsBuild);
+	commandFATTools.add_subparser(commandFATToolsPatcher);
 
 	try
 	{
@@ -379,6 +424,7 @@ int main(int argc, char* argv[])
 		std::cerr << err.what() << std::endl;
 		std::cerr << program;
 		std::exit(1);
+		return 1;
 	}
 
 	NDSFactory ndsFactory;
@@ -521,12 +567,12 @@ int main(int argc, char* argv[])
 			}
 			else if (program.is_subcommand_used("pack"))
 			{
-				if (commandPack.present("--header")) fpHeader = fs::path(commandPack.get<std::string>("--header"));
-				if (commandPack.present("--arm9")) fpARM9 = fs::path(commandPack.get<std::string>("--arm9"));
-				if (commandPack.present("--arm7")) fpARM7 = fs::path(commandPack.get<std::string>("--arm7"));
-				if (commandPack.present("--fatnametable")) fpFATNameTable = fs::path(commandPack.get<std::string>("--fatnametable"));
-				if (commandPack.present("--fat")) fpFAT = fs::path(commandPack.get<std::string>("--fat"));
-				if (commandPack.present("--fatdata")) fpFATData = fs::path(commandPack.get<std::string>("--fatdata"));
+				fpHeader = fs::path(commandPack.get<std::string>("--header"));
+				fpARM9 = fs::path(commandPack.get<std::string>("--arm9"));
+				fpARM7 = fs::path(commandPack.get<std::string>("--arm7"));
+				fpFATNameTable = fs::path(commandPack.get<std::string>("--fatnametable"));
+				fpFAT = fs::path(commandPack.get<std::string>("--fat"));
+				fpFATData = fs::path(commandPack.get<std::string>("--fatdata"));
 				if (commandPack.present("--arm9overlay")) fpARM9Overlay = fs::path(commandPack.get<std::string>("--arm9overlay"));
 				if (commandPack.present("--arm9overlaydata")) fpARM9OverlayData = fs::path(commandPack.get<std::string>("--arm9overlaydata"));
 				if (commandPack.present("--arm7overlay")) fpARM7Overlay = fs::path(commandPack.get<std::string>("--arm7overlay"));
@@ -571,7 +617,80 @@ int main(int argc, char* argv[])
 	}
 	else if (program.is_subcommand_used("fattools"))
 	{
-		//TODO
+		fs::path pathFAT;
+		if (commandFATTools.is_subcommand_used("extract"))
+		{
+			pathFAT = fs::path(commandFATToolsExtract.get<std::string>("--fat"));
+			fs::path pathFATData = fs::path(commandFATToolsExtract.get<std::string>("--fatdata"));
+			fs::path pathFATNameTable = fs::path(commandFATToolsExtract.get<std::string>("--fatnametable"));
+			uint32_t addressFATData = commandFATToolsExtract.get<uint32_t>("--fatdataaddress");
+			bool saveFATFileIDs = commandFATToolsExtract.get<bool>("--savefatfileids");
+			fs::path pathDirFATData = fs::path(commandFATToolsExtract.get<std::string>("--fatdatadir"));
+
+			std::cout << std::format("Extracting FAT Data \"{}\"...\n", pathFATData.string()) << std::endl;
+			if (fs::exists(pathDirFATData))
+			{
+				if (!fs::is_directory(pathDirFATData))
+				{
+					std::cout << std::format("Given path for extracted FAT Data already exists, but is not a directory?! Path: \"{}\"", pathDirFATData.string()) << std::endl;
+					return -1;
+				}
+			}
+			else
+			{
+				std::cout << std::format("Directory \"{}\" does not exist.", pathDirFATData.string()) << std::endl << "Creating..." << std::endl;
+				fs::create_directories(pathDirFATData);
+				std::cout << "Done" << std::endl << std::endl;
+				std::cout << "Actually extracting..." << std::endl;
+			}
+			ndsFactory.extractFatData(pathFATData.string(), pathFAT.string(), pathFATNameTable.string(), addressFATData, pathDirFATData.string(), saveFATFileIDs);
+			std::cout << "Done extracting!" << std::endl;
+		}
+		else if (commandFATTools.is_subcommand_used("build"))
+		{
+			if (commandFATToolsBuild.present("--fatoriginal")) pathFAT = fs::path(commandFATToolsBuild.get<std::string>("--fatoriginal"));
+			fs::path pathDirFATData = fs::path(commandFATToolsBuild.get<std::string>("--fatdatadir"));
+			uint32_t addressFATData = commandFATToolsBuild.get<uint32_t>("--fatdataaddress");
+			fs::path pathFATOut = fs::path(commandFATToolsBuild.get<std::string>("fatout"));
+
+			if (fs::exists(pathDirFATData))
+			{
+				if (!fs::is_directory(pathDirFATData))
+				{
+					std::cout << "Given path for FAT Data exists, but is not a directory?!" << std::endl << "Path: " << pathDirFATData.string() << std::endl;
+					std::exit(-1);
+					return -1;
+				}
+			}
+			else
+			{
+				std::cout << "Given directory for FAT Data does not exist!" << std::endl << "Path: " << pathDirFATData.string() << std::endl;
+				std::exit(-1);
+				return -1;
+			}
+
+			std::cout << std::format("Building new FAT Data file \"{}\"...", pathFATOut.string()) << std::endl << std::endl;
+			ndsFactory.buildFatData(pathDirFATData.string(), pathFAT.string(), addressFATData, pathFATOut.string());
+			std::cout << "Done building!" << std::endl;
+		}
+		else if (commandFATTools.is_subcommand_used("patch"))
+		{
+			pathFAT = fs::path(commandFATToolsPatcher.get<std::string>("--fat"));
+			uint32_t addrOriginalFATData = commandFATToolsPatcher.get<uint32_t>("--originalfatdataaddr");
+			uint32_t addrNewFATData = commandFATToolsPatcher.get<std::uint32_t>("--newfatdataaddr");
+			fs::path pathFATNew = fs::path(commandFATToolsPatcher.get<std::string>("--newfat"));
+
+			std::cout << std::format("Patching FAT Data file \"{}\"...", pathFAT.string()) << std::endl << std::endl;
+			ndsFactory.patchFat(pathFAT.string(), addrOriginalFATData, pathFATNew.string());
+			std::cout << "Done patching!" << std::endl;
+		}
+		else
+		{
+			std::cout << "Bad subcommand used for fattools?!" << std::endl << std::endl;
+			std::cout << program << std::endl;
+			std::exit(3);
+			return 3;
+		}
 	}
 	else
 	{
