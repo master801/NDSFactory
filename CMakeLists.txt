@@ -2,9 +2,12 @@ cmake_minimum_required(VERSION 3.30)
 
 project(NDSFactory LANGUAGES CXX)
 
-find_package(Boost REQUIRED COMPONENTS
-    program_options
+include(FetchContent)
+FetchContent_Declare(
+    argparse
+    GIT_REPOSITORY "https://github.com/p-ranav/argparse.git"
 )
+FetchContent_MakeAvailable(argparse)
 
 find_package(Qt6 REQUIRED COMPONENTS
     Core
@@ -99,11 +102,6 @@ else()
     add_executable(NDSFactory_GUI ${SOURCES_GUI} ${HEADERS_GUI} ${FORMS})
 endif()
 
-# Boost features
-set(Boost_USE_STATIC_LIBS ON)
-set(Boost_USE_MULTITHREADED ON)
-set(Boost_USE_STATIC_RUNTIME OFF)
-
 # Enable Qt's automatic features for the target
 set_target_properties(NDSFactory_GUI PROPERTIES
     AUTOMOC ON
@@ -116,7 +114,8 @@ function(target_compile target_name)
 
     # Add compile options for different compilers
     if(MSVC)
-        target_compile_options(${target_name} PRIVATE /WX /W4 /EHsc)
+#        target_compile_options(${target_name} PRIVATE /WX /W4 /EHsc)
+        target_compile_options(${target_name} PRIVATE /W4 /EHsc)  # TODO Disable before Git
     elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         target_compile_options(${target_name} PRIVATE -Wall -Wextra -Werror)
     elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
@@ -128,7 +127,7 @@ target_compile(NDSFactory_CLI)
 target_compile(NDSFactory_GUI)
 
 target_link_libraries(NDSFactory_CLI PRIVATE
-    Boost::program_options
+    argparse
 )
 
 # Link the necessary Qt6 libraries
@@ -138,27 +137,42 @@ target_link_libraries(NDSFactory_GUI PRIVATE
     Qt6::Widgets
 )
 
-if(EXISTS "${NDSFactory_BINARY_DIR}/qt.conf")
-    add_custom_command(TARGET NDSFactory_GUI PRE_BUILD
-        COMMAND ${CMAKE_COMMAND} -E remove "${NDSFactory_BINARY_DIR}/qt.conf"
+add_custom_target(Build_Step_1 ALL)  # Delete qt.conf (if exists)
+add_custom_target(Build_Step_2 ALL)  # Delete "deploy_gui" folder
+add_custom_target(Build_Step_3 ALL)  # Make new "deploy_gui" folder and deploy
+add_custom_target(Build_Step_4 ALL)  # Copy new qt.conf
+
+add_dependencies(Build_Step_1 NDSFactory_GUI)
+add_dependencies(Build_Step_3 Build_Step_2)
+add_dependencies(Build_Step_4 Build_Step_1)
+
+set(QT_BUILD_TYPE_CONF "${CMAKE_SOURCE_DIR}/qt.${CMAKE_BUILD_TYPE}.conf")
+set(QT_CONF "${NDSFactory_BINARY_DIR}/qt.conf")
+if(EXISTS ${QT_CONF})
+    add_custom_command(TARGET Build_Step_1 PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove ${QT_CONF}
     )
 endif()
-if(NOT EXISTS "${NDSFactory_BINARY_DIR}/qt.conf")
-    add_custom_command(TARGET NDSFactory_GUI PRE_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_SOURCE_DIR}/qt.${CMAKE_BUILD_TYPE}.conf" "${NDSFactory_BINARY_DIR}/qt.conf"
+if(NOT EXISTS ${QT_CONF})
+    add_custom_command(TARGET Build_Step_4 POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E echo "Copying \"${QT_BUILD_TYPE_CONF}\" to \"${QT_CONF}\"..."
+        COMMAND ${CMAKE_COMMAND} -E copy ${QT_BUILD_TYPE_CONF} ${QT_CONF}
+        COMMAND ${CMAKE_COMMAND} -E echo "Done copying"
     )
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(DEPLOY_GUI_DIR "${NDSFactory_BINARY_DIR}/deploy_gui")
     if(EXISTS ${DEPLOY_GUI_DIR})
-        add_custom_command(TARGET NDSFactory_GUI PRE_BUILD
+        add_custom_command(TARGET Build_Step_2 PRE_BUILD
+            COMMAND ${CMAKE_COMMAND} -E echo "Directory \"${DEPLOY_GUI_DIR}\" exists. Deleting..."
             COMMAND ${CMAKE_COMMAND} -E remove_directory "${DEPLOY_GUI_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E echo "Deleted directory"
         )
     endif()
     if(NOT EXISTS ${DEPLOY_GUI_DIR})
         if(WIN32)
-            add_custom_command(TARGET NDSFactory_GUI POST_BUILD
+            add_custom_command(TARGET Build_Step_3 POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E echo "Deploying Windows Qt Release build..."
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${DEPLOY_GUI_DIR}
                 COMMAND ${CMAKE_COMMAND} -E copy "${NDSFactory_BINARY_DIR}/${PROJECT_NAME}_GUI.exe" "${DEPLOY_GUI_DIR}/${PROJECT_NAME}.exe"
@@ -181,3 +195,5 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
         endif()
     endif()
 endif()
+
+# FIXME Fix concurrency issue with qt.conf being copied and qt being deployed

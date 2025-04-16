@@ -48,6 +48,7 @@ NFResult NDSFactory::dumpDataFromFile(const std::string& romPath, const std::str
     romFile.close();
 
     savedFile.write(dumpBuffer.data(), size);
+    savedFile.flush();
     savedFile.close();
     return NFResult({ true, "" });
 }
@@ -58,6 +59,7 @@ bool NDSFactory::logToFile(const std::string& logPath, const std::string& log)
     if (!savedFile.is_open()) return false;
 
 	savedFile.write(log.c_str(), log.size());
+    savedFile.flush();
     savedFile.close();
     return true;
 }
@@ -69,8 +71,8 @@ NFResult NDSFactory::readBytesFromFile(std::vector<char>& byteBuffer, const std:
     if (!romFile.is_open())
 		return NFResult({ false, "Error opening file: " + romPath });
 
-    romFile.seekg (startAddr, std::ios::beg);
-    romFile.read (byteBuffer.data(), size);
+    romFile.seekg(startAddr, std::ios::beg);
+    romFile.read(byteBuffer.data(), size);
     romFile.close();
 	return NFResult({ true, "" });
 }
@@ -82,7 +84,7 @@ NFResult NDSFactory::writeSectionToFile(const std::string& sectionPath, const st
 		return NFResult({ false, "Error opening file: " + sectionPath });
     
     std::vector<char> dumpBuffer(size);
-    sectionFile.read (dumpBuffer.data(), size);
+    sectionFile.read(dumpBuffer.data(), size);
     sectionFile.close();
     return writeBytesToFile(dumpBuffer, savePath, startAddr, size);
 }
@@ -96,6 +98,7 @@ NFResult NDSFactory::writeBytesToFile(std::vector<char>& byteBuffer, const std::
         if (!savedFile.is_open()) {
 			return NFResult({ false, "Error creating file: " + savePath });
         }
+        savedFile.flush();
         savedFile.close();
         savedFile.open(savePath, std::ios::in | std::ios::out | std::ios::binary);
         if (!savedFile.is_open())
@@ -104,6 +107,7 @@ NFResult NDSFactory::writeBytesToFile(std::vector<char>& byteBuffer, const std::
 
     savedFile.seekp(startAddr);
     savedFile.write(byteBuffer.data(), size);
+    savedFile.flush();
     savedFile.close();
 	return NFResult({ true, "" });
 }
@@ -285,7 +289,7 @@ NFResult NDSFactory::patchFat(const std::string& fatSectionPath, uint32_t shiftS
 
     sectionFile.seekg (0, std::ios::beg);
 
-    sectionFile.read (fatBytes.data(), sectionSize);
+    sectionFile.read(fatBytes.data(), sectionSize);
     sectionFile.close();
 
     FatRange* pfatrange = reinterpret_cast<FatRange*>(fatBytes.data());
