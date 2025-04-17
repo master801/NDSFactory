@@ -12,114 +12,348 @@ namespace fs = std::filesystem;
 
 #include "ndsfactory/ndsfactory.h"
 
-static void generateHeader(NDSFactory* ndsFactory, NDSHeader* ndsHeader)
+static int packROM(NDSFactory* ndsFactory, fs::path pathROMOut, int pad, bool trim, bool shouldFixCRC, fs::path pathHeader, fs::path pathARM9, fs::path pathARM7, fs::path pathFATNameTable, fs::path pathFAT, fs::path pathFATData, fs::path pathARM9Overlay, fs::path pathARM9OverlayData, fs::path pathARM7Overlay, fs::path pathARM7OverlayData, fs::path pathLogos)
 {
-}
+	NFResult nfResult;
 
-static void packROM(NDSFactory* ndsFactory, fs::path pathROMOut, int pad, bool trim, fs::path fpHeader, fs::path fpARM9, fs::path fpARM7, fs::path fpFATNameTable, fs::path fpFAT, fs::path fpFATData, fs::path fpARM9Overlay, fs::path fpARM9OverlayData, fs::path fpARM7Overlay, fs::path fpARM7OverlayData, fs::path fpLogos)
-{
 	std::vector<char> romHeaderBuffer(sizeof(NDSHeader));
-	NDSHeader* ndsHeader = reinterpret_cast<NDSHeader*>(romHeaderBuffer.data());
-	ndsFactory->loadRomHeader(fpHeader.string(), romHeaderBuffer);
-
-	//TODO
-	if (!ndsFactory->checkArm9FooterPresence(fpARM9.string(), ndsHeader->Arm9Size))
+	nfResult = ndsFactory->loadRomHeader(pathHeader.string(), romHeaderBuffer);
+	if (!nfResult.result)
 	{
-		std::cout << std::format("Given ARM9 file does not have a footer! Path: \"{}\"", fpARM9.string()) << std::endl;
-		std::exit(1);
-		return;
+		std::cout << nfResult.message << std::endl;
+		return 1;
+	}
+	
+	NDSHeader* ndsHeader = reinterpret_cast<NDSHeader*>(romHeaderBuffer.data());
+
+	//TODO Add arguments to modify the ROM header
+
+	if (shouldFixCRC)
+	{
+		ndsHeader->HeaderCRC16 = ndsFactory->calcHeaderCrc16(romHeaderBuffer);
+		std::cout << "Fixed header CRC16" << std::endl;
 	}
 
-	char padChar;
+	bool hasARM9Footer = ndsFactory->checkArm9FooterPresence(pathARM9.string(), ndsHeader->Arm9Size);
+
+	char paddingType;
 	if (pad == 0)
 	{
-		padChar = '\x00';
+		paddingType = '\x00';
 	}
 	else if (pad == 1)
 	{
-		padChar = '\xFF';
+		paddingType = '\xFF';
+	}
+	
+	uint32_t addrStart;
+	uint32_t size;
+
+	//Write header
+	nfResult = ndsFactory->writeBytesToFile(romHeaderBuffer, pathROMOut.string(), 0, sizeof(NDSHeader));
+	if (!nfResult.result)
+	{
+		std::cout << nfResult.message << std::endl;
+		return -1;
+	}
+
+	//Write header padding
+	addrStart = sizeof(NDSHeader);
+	size = ndsHeader->Arm9RomAddr - addrStart;
+	nfResult = ndsFactory->writePaddingToFile(paddingType, pathROMOut.string(), addrStart, size);
+	if (!nfResult.result)
+	{
+		std::cout << nfResult.message << std::endl;
+		return -1;
+	}
+
+	//Write ARM9 bin
+	addrStart = ndsHeader->Arm9RomAddr;
+	size = ndsHeader->Arm9Size + (hasARM9Footer ? Arm9FooterSize : 0);
+	nfResult = ndsFactory->writeSectionToFile(pathARM9.string(), pathROMOut.string(), addrStart, size);
+	if (!nfResult.result)
+	{
+		std::cout << nfResult.message << std::endl;
+		return -1;
+	}
+
+	//Write ARM9 padding
+	addrStart = ndsHeader->Arm9RomAddr + ndsHeader->Arm9Size;
+	if (ndsHeader->Arm9OverlayAddr)
+	{
+		size = ndsHeader->Arm9OverlayAddr - addrStart;
 	}
 	else
 	{
-		std::cout << std::format("Invalid pad option \"{}\"!", pad) << std::endl;
-		std::exit(2);
-		return;
+		size = ndsHeader->Arm7RomAddr - addrStart;
 	}
-	
-	//TODO
+	if (hasARM9Footer)
+	{
+		addrStart += Arm9FooterSize;
+		size -= Arm9FooterSize;
+	}
+	nfResult = ndsFactory->writePaddingToFile(paddingType, pathROMOut.string(), addrStart, size);
+	if (!nfResult.result)
+	{
+		std::cout << nfResult.message << std::endl;
+		return -1;
+	}
 
-	//ndsFactory->writeBytesToFile(romHeaderBuffer, pathROMOut.string(), 0, sizeof(NDSHeader));
+	//Write ARM9 overlay
+	if (ndsHeader->Arm9OverlayAddr)
+	{
+		//TODO
+		std::cout << "Hit!";
+	}
+
+	//Write ARM7
+	nfResult = ndsFactory->writeSectionToFile(pathARM7.string(), pathROMOut.string(), ndsHeader->Arm7RomAddr, ndsHeader->Arm7Size);
+	if (!nfResult.result)
+	{
+		std::cout << nfResult.message << std::endl;
+		return -1;
+	}
+
+	//Write ARM7 padding
+	addrStart = ndsHeader->Arm7RomAddr + ndsHeader->Arm7Size;
+	if (ndsHeader->Arm7OverlayAddr)
+	{
+		size = ndsHeader->Arm7OverlayAddr - addrStart;
+	}
+	else
+	{
+		size = ndsHeader->FilenameTableAddr - addrStart;
+	}
+	nfResult = ndsFactory->writePaddingToFile(paddingType, pathROMOut.string(), addrStart, size);
+	if (!nfResult.result)
+	{
+		std::cout << nfResult.message << std::endl;
+		return -1;
+	}
+
+	//Write ARM7 overlay
+	if (ndsHeader->Arm7OverlayAddr)
+	{
+		//TODO
+		std::cout << "Hit!";
+	}
+
+	//Write FAT Name Table
+	nfResult = ndsFactory->writeSectionToFile(pathFATNameTable.string(), pathROMOut.string(), ndsHeader->FilenameTableAddr, ndsHeader->FilenameSize);
+	if (!nfResult.result)
+	{
+		std::cout << nfResult.message << std::endl;
+		return -1;
+	}
+
+	//Write FAT Name Table padding
+	addrStart = ndsHeader->FilenameTableAddr + ndsHeader->FilenameSize;
+	size = ndsHeader->FATAddr - addrStart;
+	nfResult = ndsFactory->writePaddingToFile(paddingType, pathROMOut.string(), addrStart, size);
+	if (!nfResult.result)
+	{
+		std::cout << nfResult.message << std::endl;
+		return -1;
+	}
+
+	//Write FAT
+	nfResult = ndsFactory->writeSectionToFile(pathFAT.string(), pathROMOut.string(), ndsHeader->FATAddr, ndsHeader->FATSize);
+	if (!nfResult.result)
+	{
+		std::cout << nfResult.message << std::endl;
+		return -1;
+	}
+
+	//Write FAT padding
+	addrStart = ndsHeader->FATAddr + ndsHeader->FATSize;
+	size = ndsHeader->IconTitleAddr - addrStart;
+	nfResult = ndsFactory->writePaddingToFile(paddingType, pathROMOut.string(), addrStart, size);
+	if (!nfResult.result)
+	{
+		std::cout << nfResult.message << std::endl;
+		return -1;
+	}
+
+	//Write Icon / Title logo
+	nfResult = ndsFactory->writeSectionToFile(pathLogos.string(), pathROMOut.string(), ndsHeader->IconTitleAddr, IconTitleSize);
+	if (!nfResult.result)
+	{
+		std::cout << nfResult.message << std::endl;
+		return -1;
+	}
+
+	//Write FAT Data
+	addrStart = ndsHeader->IconTitleAddr + IconTitleSize;
+	size = ndsHeader->RomSize - addrStart;
+	nfResult = ndsFactory->writeSectionToFile(pathFATData.string(), pathROMOut.string(), addrStart, size);
+	if (!nfResult.result)
+	{
+		std::cout << nfResult.message << std::endl;
+		return -1;
+	}
+
+	//Write ROM padding
+	if (!trim)
+	{
+		addrStart = ndsHeader->RomSize;
+		size = ndsFactory->getCardSizeInBytes(ndsHeader->DeviceSize) - addrStart;
+		nfResult = ndsFactory->writePaddingToFile(paddingType, pathROMOut.string(), addrStart, size);
+		if (!nfResult.result)
+		{
+			std::cout << nfResult.message << std::endl;
+			return -1;
+		}
+	}
+
+	return 0;
 }
 
-static void unpackROM(const fs::path fpROM, NDSFactory* ndsFactory, NDSHeader* ndsHeader, bool overdumpARM9, fs::path fpHeader, fs::path fpARM9, fs::path fpARM7, fs::path fpFATNameTable, fs::path fpFAT, fs::path fpFATData, fs::path fpARM9Overlay, fs::path fpARM9OverlayData, fs::path fpARM7Overlay, fs::path fpARM7OverlayData, fs::path fpLogos)
+static void unpackROM(const fs::path fpROM, NDSFactory* ndsFactory, NDSHeader* ndsHeader, bool overdumpARM9, fs::path pathHeader, fs::path pathARM9, fs::path pathARM7, fs::path pathFATNameTable, fs::path pathFAT, fs::path pathFATData, fs::path pathARM9Overlay, fs::path pathARM9OverlayData, fs::path pathARM7Overlay, fs::path pathARM7OverlayData, fs::path pathLogos)
 {
-	if (!(fpHeader.empty()))
+	NFResult nfResult;
+
+	if (!(pathHeader.empty()))
 	{
-		ndsFactory->dumpDataFromFile(fpROM.string(), fpHeader.string(), 0, ndsHeader->HeaderSize);
-		std::cout << std::format("Dumped Header to \"{}\"", fpHeader.string()) << std::endl;
+		nfResult = ndsFactory->dumpDataFromFile(fpROM.string(), pathHeader.string(), 0, ndsHeader->HeaderSize);
+		if (nfResult.result)
+		{
+			std::cout << std::format("Dumped Header to \"{}\"", pathHeader.string()) << std::endl;
+		}
+		else
+		{
+			std::cout << nfResult.message << std::endl;
+		}
 	}
 
-	uint32_t sizeARM9 = ndsHeader->Arm9Size;
-	if (overdumpARM9) sizeARM9 += 12;
-	if (!(fpARM9.empty()))
+	if (!(pathARM9.empty()))
 	{
-		ndsFactory->dumpDataFromFile(fpROM.string(), fpARM9.string(), ndsHeader->Arm9RomAddr, sizeARM9);
-		std::cout << std::format("Dumped ARM9 to \"{}\"", fpARM9.string()) << std::endl;
+		nfResult = ndsFactory->dumpDataFromFile(fpROM.string(), pathARM9.string(), ndsHeader->Arm9RomAddr, ndsHeader->Arm9Size + (overdumpARM9 ? Arm9FooterSize : 0));
+		if (nfResult.result)
+		{
+			std::cout << std::format("Dumped ARM9 to \"{}\"", pathARM9.string()) << std::endl;
+		}
+		else
+		{
+			std::cout << nfResult.message << std::endl;
+		}
 	}
 
-	if (!(fpARM7.empty()))
+	if (!(pathARM7.empty()))
 	{
-		ndsFactory->dumpDataFromFile(fpROM.string(), fpARM7.string(), ndsHeader->Arm7RomAddr, ndsHeader->Arm7Size);
-		std::cout << std::format("Dumped ARM7 to \"{}\"", fpARM7.string()) << std::endl;
+		nfResult = ndsFactory->dumpDataFromFile(fpROM.string(), pathARM7.string(), ndsHeader->Arm7RomAddr, ndsHeader->Arm7Size);
+		if (nfResult.result)
+		{
+			std::cout << std::format("Dumped ARM7 to \"{}\"", pathARM7.string()) << std::endl;
+		}
+		else
+		{
+			std::cout << nfResult.message << std::endl;
+		}
 	}
-	if (!(fpFATNameTable.empty()))
+	if (!(pathFATNameTable.empty()))
 	{
-		ndsFactory->dumpDataFromFile(fpROM.string(), fpFATNameTable.string(), ndsHeader->FilenameTableAddr, ndsHeader->FilenameSize);
-		std::cout << std::format("Dumped FAT Name Table to \"{}\"", fpFATNameTable.string()) << std::endl;
+		nfResult = ndsFactory->dumpDataFromFile(fpROM.string(), pathFATNameTable.string(), ndsHeader->FilenameTableAddr, ndsHeader->FilenameSize);
+		if (nfResult.result)
+		{
+			std::cout << std::format("Dumped FAT Name Table to \"{}\"", pathFATNameTable.string()) << std::endl;
+		}
+		else
+		{
+			std::cout << nfResult.message << std::endl;
+		}
 	}
-	if (!(fpFAT.empty()))
+	if (!(pathFAT.empty()))
 	{
-		ndsFactory->dumpDataFromFile(fpROM.string(), fpFAT.string(), ndsHeader->FATAddr, ndsHeader->FATSize);
-		std::cout << std::format("Dumped FAT to \"{}\"", fpFAT.string()) << std::endl;
+		nfResult = ndsFactory->dumpDataFromFile(fpROM.string(), pathFAT.string(), ndsHeader->FATAddr, ndsHeader->FATSize);
+		if (nfResult.result)
+		{
+			std::cout << std::format("Dumped FAT to \"{}\"", pathFAT.string()) << std::endl;
+		}
+		else
+		{
+			std::cout << nfResult.message << std::endl;
+		}
 	}
 
 	uint32_t startAddrFATData = ndsHeader->IconTitleAddr + IconTitleSize;
 	uint32_t sizeFATData = ndsHeader->RomSize - startAddrFATData;
-	if (!(fpFATData.empty()))
+	if (!(pathFATData.empty()))
 	{
-		ndsFactory->dumpDataFromFile(fpROM.string(), fpFATData.string(), startAddrFATData, sizeFATData);
-		std::cout << std::format("Dumped FAT Data to \"{}\"", fpFATData.string()) << std::endl;
+		nfResult = ndsFactory->dumpDataFromFile(fpROM.string(), pathFATData.string(), startAddrFATData, sizeFATData);
+		if (nfResult.result)
+		{
+			std::cout << std::format("Dumped FAT Data to \"{}\"", pathFATData.string()) << std::endl;
+		}
+		else
+		{
+			std::cout << nfResult.message << std::endl;
+		}
 	}
-	if (!(fpARM9Overlay.empty()))
+	if (!(pathARM9Overlay.empty()))
 	{
-		ndsFactory->dumpDataFromFile(fpROM.string(), fpARM9Overlay.string(), ndsHeader->Arm9OverlayAddr, ndsHeader->Arm9OverlaySize);
-		std::cout << std::format("Dumped ARM9 Overlay to \"{}\"", fpARM9Overlay.string()) << std::endl;
+		nfResult = ndsFactory->dumpDataFromFile(fpROM.string(), pathARM9Overlay.string(), ndsHeader->Arm9OverlayAddr, ndsHeader->Arm9OverlaySize);
+		if (nfResult.result)
+		{
+			std::cout << std::format("Dumped ARM9 Overlay to \"{}\"", pathARM9Overlay.string()) << std::endl;
+		}
+		else
+		{
+			std::cout << nfResult.message << std::endl;
+		}
 	}
 
 	uint32_t startAddrARM9OverlayData = ndsHeader->Arm9OverlayAddr + ndsHeader->Arm9OverlaySize;
 	uint32_t sizeARM9OverlayData = ndsHeader->FilenameTableAddr - startAddrARM9OverlayData;
-	if (!(fpARM9OverlayData.empty()))
+	if (!(pathARM9OverlayData.empty()))
 	{
-		ndsFactory->dumpDataFromFile(fpROM.string(), fpARM9OverlayData.string(), startAddrARM9OverlayData, sizeARM9OverlayData);
-		std::cout << std::format("Dumped ARM9 Overlay Data to \"{}\"", fpARM9OverlayData.string()) << std::endl;
+		nfResult = ndsFactory->dumpDataFromFile(fpROM.string(), pathARM9OverlayData.string(), startAddrARM9OverlayData, sizeARM9OverlayData);
+		if (nfResult.result)
+		{
+			std::cout << std::format("Dumped ARM9 Overlay Data to \"{}\"", pathARM9OverlayData.string()) << std::endl;
+		}
+		else
+		{
+			std::cout << nfResult.message << std::endl;
+		}
 	}
-	if (!(fpARM7Overlay.empty()))
+	if (!(pathARM7Overlay.empty()))
 	{
-		ndsFactory->dumpDataFromFile(fpROM.string(), fpARM7Overlay.string(), ndsHeader->Arm7OverlayAddr, ndsHeader->Arm7OverlaySize);
-		std::cout << std::format("Dumped ARM7 Overlay to \"{}\"", fpARM7Overlay.string()) << std::endl;
+		nfResult = ndsFactory->dumpDataFromFile(fpROM.string(), pathARM7Overlay.string(), ndsHeader->Arm7OverlayAddr, ndsHeader->Arm7OverlaySize);
+		if (nfResult.result)
+		{
+			std::cout << std::format("Dumped ARM7 Overlay to \"{}\"", pathARM7Overlay.string()) << std::endl;
+		}
+		else
+		{
+			std::cout << nfResult.message << std::endl;
+		}
 	}
 
 	uint32_t startAddrARM7OverlayData = ndsHeader->Arm7OverlayAddr + ndsHeader->Arm7OverlaySize;
 	uint32_t sizeARM7OverlayData = ndsHeader->FilenameTableAddr - startAddrARM7OverlayData;
-	if (!(fpARM7OverlayData.empty()))
+	if (!(pathARM7OverlayData.empty()))
 	{
-		ndsFactory->dumpDataFromFile(fpROM.string(), fpARM7OverlayData.string(), startAddrARM7OverlayData, sizeARM7OverlayData);
-		std::cout << std::format("Dumped ARM7 Overlay Data to \"{}\"", fpARM7OverlayData.string()) << std::endl;
+		nfResult = ndsFactory->dumpDataFromFile(fpROM.string(), pathARM7OverlayData.string(), startAddrARM7OverlayData, sizeARM7OverlayData);
+		if (nfResult.result)
+		{
+			std::cout << std::format("Dumped ARM7 Overlay Data to \"{}\"", pathARM7OverlayData.string()) << std::endl;
+		}
+		else
+		{
+			std::cout << nfResult.message << std::endl;
+		}
 	}
-	if (!(fpLogos.empty()))
+	if (!(pathLogos.empty()))
 	{
-		ndsFactory->dumpDataFromFile(fpROM.string(), fpLogos.string(), ndsHeader->IconTitleAddr, IconTitleSize);
-		std::cout << std::format("Dumped Logos to \"{}\"", fpLogos.string()) << std::endl;
+		nfResult = ndsFactory->dumpDataFromFile(fpROM.string(), pathLogos.string(), ndsHeader->IconTitleAddr, IconTitleSize);
+		if (nfResult.result)
+		{
+			std::cout << std::format("Dumped Logos to \"{}\"", pathLogos.string()) << std::endl;
+		}
+		else
+		{
+			std::cout << nfResult.message << std::endl;
+		}
 	}
 }
 
@@ -190,8 +424,8 @@ static void printInfo(NDSHeader* ndsHeader)
 
 int main(int argc, char* argv[])
 {
+	//Set up commands
 	argparse::ArgumentParser program("NDSFactory");
-
 	program
 		.add_argument("--rom", "-r")
 		.metavar("<ROM>")
@@ -315,6 +549,12 @@ int main(int argc, char* argv[])
 		.flag()
 		.required()
 		.help("Trim ROM after packing.\nBy default, the ROM is not trimmed.\n");
+	commandPack
+		.add_argument("--fixcrc", "-crc")
+		.default_value(true)
+		.implicit_value(false)
+		.required()
+		.help("Fixes the ROM's header CRC.\nCommerical ROMs will not load if this is not enabled.\nEnabled by default.");
 
 	argparse::ArgumentParser commandFATTools("fattools");
 	commandFATTools.add_description("Tools for modifying the FAT");
@@ -365,7 +605,7 @@ int main(int argc, char* argv[])
 
 	argparse::ArgumentParser commandFATToolsBuild("build");
 	commandFATToolsBuild
-		.add_argument("--fat", "-f")
+		.add_argument("--fatoriginal", "-fo")
 		.metavar("<fat.bin>")
 		.help("Original <fat.bin> file\nOnly required if the ROM uses overlays");
 	commandFATToolsBuild
@@ -380,9 +620,9 @@ int main(int argc, char* argv[])
 		.required()
 		.help("Original address of FAT data in Hex.\nEx: 0xDEADBEEF");
 	commandFATToolsBuild
-		.add_argument("--fatout", "-fo")
+		.add_argument("--fatdatadirout", "-fddo")
 		.required()
-		.help("File to write the rebuilt <fat.bin>");
+		.help("The directory to write the new <fat.bin> and <fat_data.bin> to.");
 
 	argparse::ArgumentParser commandFATToolsPatcher("patch");
 	commandFATToolsPatcher
@@ -428,6 +668,7 @@ int main(int argc, char* argv[])
 	}
 
 	NDSFactory ndsFactory;
+	NFResult nfResult;
 	if (program.present("--rom"))
 	{
 		ndsFactory = NDSFactory();
@@ -441,88 +682,87 @@ int main(int argc, char* argv[])
 		
 		if (program.is_subcommand_used("unpack") || program.is_subcommand_used("pack"))
 		{
-			fs::path fpHeader;
-			fs::path fpARM9;
-			fs::path fpARM7;
-			fs::path fpFATNameTable;
-			fs::path fpFAT;
-			fs::path fpFATData;
-			fs::path fpARM9Overlay;
-			fs::path fpARM9OverlayData;
-			fs::path fpARM7Overlay;
-			fs::path fpARM7OverlayData;
-			fs::path fpLogos;
+			fs::path pathHeader;
+			fs::path pathARM9;
+			fs::path pathARM7;
+			fs::path pathFATNameTable;
+			fs::path pathFAT;
+			fs::path pathFATData;
+			fs::path pathARM9Overlay;
+			fs::path pathARM9OverlayData;
+			fs::path pathARM7Overlay;
+			fs::path pathARM7OverlayData;
+			fs::path pathLogos;
 
-			//TODO Make these checks
-			/*if (!fs::exists(fpHeader.parent_path()) || (fs::exists(fpHeader.parent_path()) && !fs::is_directory(fpHeader.parent_path())))
-			{
-				std::cout << std::format("Cannot extract header due to directory \"{}\" being non-existant!", fs::absolute(fpHeader).string()) << std::endl;
-				std::exit(10);
-				return 10;
-			}*/
 			if (program.is_subcommand_used("unpack"))
 			{
 				std::cout << std::format("Unpacking \"{}\"...", pathROM.string()) << std::endl << std::endl;
 
 				std::vector<char> romHeader;
-				ndsFactory.loadRomHeader(fs::absolute(pathROM).string(), romHeader);
+				nfResult = ndsFactory.loadRomHeader(fs::absolute(pathROM).string(), romHeader);
+				if (!nfResult.result)
+				{
+					std::cout << nfResult.message << std::endl;
+					std::exit(-1);
+					return -1;
+				}
 				NDSHeader* ndsHeader = reinterpret_cast<NDSHeader*>(romHeader.data());
 
-				if (commandUnpack.present("--header")) fpHeader = fs::path(commandUnpack.get<std::string>("--header"));
-				if (commandUnpack.present("--arm9")) fpARM9 = fs::path(commandUnpack.get<std::string>("--arm9"));
-				if (commandUnpack.present("--arm7")) fpARM7 = fs::path(commandUnpack.get<std::string>("--arm7"));
-				if (commandUnpack.present("--fatnametable")) fpFATNameTable = fs::path(commandUnpack.get<std::string>("--fatnametable"));
-				if (commandUnpack.present("--fat")) fpFAT = fs::path(commandUnpack.get<std::string>("--fat"));
-				if (commandUnpack.present("--fatdata")) fpFATData = fs::path(commandUnpack.get<std::string>("--fatdata"));
-				if (commandUnpack.present("--arm9overlay")) fpARM9Overlay = fs::path(commandUnpack.get<std::string>("--arm9overlay"));
-				if (commandUnpack.present("--arm9overlaydata")) fpARM9OverlayData = fs::path(commandUnpack.get<std::string>("--arm9overlaydata"));
-				if (commandUnpack.present("--arm7overlay")) fpARM7Overlay = fs::path(commandUnpack.get<std::string>("--arm7overlay"));
-				if (commandUnpack.present("--arm7overlaydata")) fpARM7OverlayData = fs::path(commandUnpack.get<std::string>("--arm7overlaydata"));
-				if (commandUnpack.present("--logos")) fpLogos = fs::path(commandUnpack.get<std::string>("--logos"));
+				if (commandUnpack.present("--header")) pathHeader = fs::path(commandUnpack.get<std::string>("--header"));
+				if (commandUnpack.present("--arm9")) pathARM9 = fs::path(commandUnpack.get<std::string>("--arm9"));
+				if (commandUnpack.present("--arm7")) pathARM7 = fs::path(commandUnpack.get<std::string>("--arm7"));
+				if (commandUnpack.present("--fatnametable")) pathFATNameTable = fs::path(commandUnpack.get<std::string>("--fatnametable"));
+				if (commandUnpack.present("--fat")) pathFAT = fs::path(commandUnpack.get<std::string>("--fat"));
+				if (commandUnpack.present("--fatdata")) pathFATData = fs::path(commandUnpack.get<std::string>("--fatdata"));
+				if (commandUnpack.present("--arm9overlay")) pathARM9Overlay = fs::path(commandUnpack.get<std::string>("--arm9overlay"));
+				if (commandUnpack.present("--arm9overlaydata")) pathARM9OverlayData = fs::path(commandUnpack.get<std::string>("--arm9overlaydata"));
+				if (commandUnpack.present("--arm7overlay")) pathARM7Overlay = fs::path(commandUnpack.get<std::string>("--arm7overlay"));
+				if (commandUnpack.present("--arm7overlaydata")) pathARM7OverlayData = fs::path(commandUnpack.get<std::string>("--arm7overlaydata"));
+				if (commandUnpack.present("--logos")) pathLogos = fs::path(commandUnpack.get<std::string>("--logos"));
 
-				if (fpHeader.empty())
+				if (pathHeader.empty())
 				{
 					std::cout << "Missing header argument!" << std::endl << std::endl;
 					std::cout << program << std::endl;
 					std::exit(2);
 					return 2;
 				}
-				if (fpARM9.empty())
+				if (pathARM9.empty())
 				{
 					std::cout << "Missing ARM9 argument!" << std::endl << std::endl;
 					std::cout << program << std::endl;
 					std::exit(2);
 					return 2;
 				}
-				if (fpARM7.empty())
+				if (pathARM7.empty())
 				{
 					std::cout << "Missing ARM7 argument!" << std::endl << std::endl;
 					std::cout << program << std::endl;
 					std::exit(2);
 					return 2;
 				}
-				if (fpFATNameTable.empty())
+				if (pathFATNameTable.empty())
 				{
 					std::cout << "Missing FAT Name Table argument!" << std::endl << std::endl;
 					std::cout << program << std::endl;
 					std::exit(2);
 					return 2;
 				}
-				if (fpFAT.empty())
+				if (pathFAT.empty())
 				{
 					std::cout << "Missing FAT argument!" << std::endl << std::endl;
 					std::cout << program << std::endl;
 					std::exit(2);
 					return 2;
 				}
-				if (fpFATData.empty())
+				if (pathFATData.empty())
 				{
 					std::cout << "Missing FAT Data argument!" << std::endl << std::endl;
 					std::cout << program << std::endl;
 					std::exit(2);
 					return 2;
 				}
-				if (fpLogos.empty())
+				if (pathLogos.empty())
 				{
 					std::cout << "Missing Icon / Title logo argument!" << std::endl << std::endl;
 					std::cout << program << std::endl;
@@ -530,14 +770,14 @@ int main(int argc, char* argv[])
 					return 2;
 				}
 
-				if (!fpARM9OverlayData.empty() && fpARM9Overlay.empty())
+				if (!pathARM9OverlayData.empty() && pathARM9Overlay.empty())
 				{
 					std::cout << "Was given ARM9 Overlay Data, but missing ARM9 Overlay argument!" << std::endl << std::endl;
 					std::cout << program << std::endl;
 					std::exit(2);
 					return 2;
 				}
-				if (!fpARM7OverlayData.empty() && fpARM7Overlay.empty())
+				if (!pathARM7OverlayData.empty() && pathARM7Overlay.empty())
 				{
 					std::cout << "Was given ARM7 Overlay Data, but missing ARM7 Overlay argument!" << std::endl << std::endl;
 					std::cout << program << std::endl;
@@ -550,63 +790,89 @@ int main(int argc, char* argv[])
 					&ndsFactory,
 					ndsHeader,
 					commandUnpack.get<bool>("--arm9overdump"),
-					fpHeader,
-					fpARM9,
-					fpARM7,
-					fpFATNameTable,
-					fpFAT,
-					fpFATData,
-					fpARM9Overlay,
-					fpARM9OverlayData,
-					fpARM7Overlay,
-					fpARM7OverlayData,
-					fpLogos
+					pathHeader,
+					pathARM9,
+					pathARM7,
+					pathFATNameTable,
+					pathFAT,
+					pathFATData,
+					pathARM9Overlay,
+					pathARM9OverlayData,
+					pathARM7Overlay,
+					pathARM7OverlayData,
+					pathLogos
 				);
 
 				std::cout << std::endl << "Done unpacking!" << std::endl;
 			}
 			else if (program.is_subcommand_used("pack"))
 			{
-				fpHeader = fs::path(commandPack.get<std::string>("--header"));
-				fpARM9 = fs::path(commandPack.get<std::string>("--arm9"));
-				fpARM7 = fs::path(commandPack.get<std::string>("--arm7"));
-				fpFATNameTable = fs::path(commandPack.get<std::string>("--fatnametable"));
-				fpFAT = fs::path(commandPack.get<std::string>("--fat"));
-				fpFATData = fs::path(commandPack.get<std::string>("--fatdata"));
-				if (commandPack.present("--arm9overlay")) fpARM9Overlay = fs::path(commandPack.get<std::string>("--arm9overlay"));
-				if (commandPack.present("--arm9overlaydata")) fpARM9OverlayData = fs::path(commandPack.get<std::string>("--arm9overlaydata"));
-				if (commandPack.present("--arm7overlay")) fpARM7Overlay = fs::path(commandPack.get<std::string>("--arm7overlay"));
-				if (commandPack.present("--arm7overlaydata")) fpARM7OverlayData = fs::path(commandPack.get<std::string>("--arm7overlaydata"));
-				if (commandPack.present("--logos")) fpLogos = fs::path(commandPack.get<std::string>("--logos"));
+				pathHeader = fs::path(commandPack.get<std::string>("--header"));
+				pathARM9 = fs::path(commandPack.get<std::string>("--arm9"));
+				pathARM7 = fs::path(commandPack.get<std::string>("--arm7"));
+				pathFATNameTable = fs::path(commandPack.get<std::string>("--fatnametable"));
+				pathFAT = fs::path(commandPack.get<std::string>("--fat"));
+				pathFATData = fs::path(commandPack.get<std::string>("--fatdata"));
+				if (commandPack.present("--arm9overlay")) pathARM9Overlay = fs::path(commandPack.get<std::string>("--arm9overlay"));
+				if (commandPack.present("--arm9overlaydata")) pathARM9OverlayData = fs::path(commandPack.get<std::string>("--arm9overlaydata"));
+				if (commandPack.present("--arm7overlay")) pathARM7Overlay = fs::path(commandPack.get<std::string>("--arm7overlay"));
+				if (commandPack.present("--arm7overlaydata")) pathARM7OverlayData = fs::path(commandPack.get<std::string>("--arm7overlaydata"));
+				if (commandPack.present("--logos")) pathLogos = fs::path(commandPack.get<std::string>("--logos"));
 
 				int pad = commandPack.get<int>("--pad");
 				bool trim = commandPack.get<bool>("--trim");
+				bool shouldFixCRC = commandPack.get<bool>("--fixcrc");
 
-				packROM(
+				int statusCode = packROM(
 					&ndsFactory,
 					pathROM,
 					pad,
 					trim,
-					fpHeader,
-					fpARM9,
-					fpARM7,
-					fpFATNameTable,
-					fpFAT,
-					fpFATData,
-					fpARM9Overlay,
-					fpARM9OverlayData,
-					fpARM7Overlay,
-					fpARM7OverlayData,
-					fpLogos
+					shouldFixCRC,
+					pathHeader,
+					pathARM9,
+					pathARM7,
+					pathFATNameTable,
+					pathFAT,
+					pathFATData,
+					pathARM9Overlay,
+					pathARM9OverlayData,
+					pathARM7Overlay,
+					pathARM7OverlayData,
+					pathLogos
 				);
 
-				std::cout << "Done packing!" << std::endl;
+				if (!statusCode)
+				{
+					std::cout << "Done packing!" << std::endl;
+				}
+				else if (statusCode == 1)
+				{
+					std::cout << "Failed to pack due to given header file being invalid!" << std::endl;
+					std::exit(statusCode);
+				}
+				else if (statusCode == 2)
+				{
+					std::cout << std::format("Failed to pack due to given ARM9 file \"{}\" being invalid!", pathARM9.string()) << std::endl;
+					std::exit(statusCode);
+				}
+				else
+				{
+					std::cout << std::format("Failed to pack due to unknown status code \"{}\"!", statusCode) << std::endl;
+					std::exit(statusCode);
+				}
 			}
 		}
 		else
 		{
 			std::vector<char> romHeader;
-			ndsFactory.loadRomHeader(fs::absolute(pathROM).string(), romHeader);
+			nfResult = ndsFactory.loadRomHeader(fs::absolute(pathROM).string(), romHeader);
+			if (!nfResult.result)
+			{
+				std::cout << nfResult.message << std::endl;
+				std::exit(-1);
+				return -1;
+			}
 			std::cout << std::format("Info of ROM \"{}\":", pathROM.string()) << std::endl << std::endl;
 			printInfo(
 				reinterpret_cast<NDSHeader*>(romHeader.data())
@@ -643,7 +909,15 @@ int main(int argc, char* argv[])
 				std::cout << "Done" << std::endl << std::endl;
 				std::cout << "Actually extracting..." << std::endl;
 			}
-			ndsFactory.extractFatData(pathFATData.string(), pathFAT.string(), pathFATNameTable.string(), addressFATData, pathDirFATData.string(), saveFATFileIDs);
+			nfResult = ndsFactory.extractFatData(pathFATData.string(), pathFAT.string(), pathFATNameTable.string(), addressFATData, pathDirFATData.string(), saveFATFileIDs);
+
+			if (!nfResult.result)
+			{
+				std::cout << nfResult.message << std::endl;
+				std::exit(-1);
+				return -1;
+			}
+
 			std::cout << "Done extracting!" << std::endl;
 		}
 		else if (commandFATTools.is_subcommand_used("build"))
@@ -651,7 +925,7 @@ int main(int argc, char* argv[])
 			if (commandFATToolsBuild.present("--fatoriginal")) pathFAT = fs::path(commandFATToolsBuild.get<std::string>("--fatoriginal"));
 			fs::path pathDirFATData = fs::path(commandFATToolsBuild.get<std::string>("--fatdatadir"));
 			uint32_t addressFATData = commandFATToolsBuild.get<uint32_t>("--fatdataaddress");
-			fs::path pathFATOut = fs::path(commandFATToolsBuild.get<std::string>("fatout"));
+			fs::path pathDirFATOut = fs::path(commandFATToolsBuild.get<std::string>("--fatdatadirout"));
 
 			if (fs::exists(pathDirFATData))
 			{
@@ -669,8 +943,15 @@ int main(int argc, char* argv[])
 				return -1;
 			}
 
-			std::cout << std::format("Building new FAT Data file \"{}\"...", pathFATOut.string()) << std::endl << std::endl;
-			ndsFactory.buildFatData(pathDirFATData.string(), pathFAT.string(), addressFATData, pathFATOut.string());
+			std::cout << std::format("Building new FAT Data file \"{}\"...", pathDirFATOut.string()) << std::endl << std::endl;
+			nfResult = ndsFactory.buildFatData(pathDirFATData.string(), pathFAT.string(), addressFATData, pathDirFATOut.string());
+			if (!nfResult.result)
+			{
+				std::cout << nfResult.message << std::endl;
+				std::exit(-1);
+				return -1;
+			}
+
 			std::cout << "Done building!" << std::endl;
 		}
 		else if (commandFATTools.is_subcommand_used("patch"))
@@ -680,8 +961,18 @@ int main(int argc, char* argv[])
 			uint32_t addrNewFATData = commandFATToolsPatcher.get<std::uint32_t>("--newfatdataaddr");
 			fs::path pathFATNew = fs::path(commandFATToolsPatcher.get<std::string>("--newfat"));
 
+			uint32_t posDiff = posDiff = addrOriginalFATData - addrNewFATData;
+			if (addrOriginalFATData < addrNewFATData) posDiff = addrNewFATData - addrOriginalFATData;
+
 			std::cout << std::format("Patching FAT Data file \"{}\"...", pathFAT.string()) << std::endl << std::endl;
-			ndsFactory.patchFat(pathFAT.string(), addrOriginalFATData, pathFATNew.string());
+			nfResult = ndsFactory.patchFat(pathFAT.string(), posDiff, pathFATNew.string());
+
+			if (!nfResult.result)
+			{
+				std::cout << nfResult.message << std::endl;
+				return -1;
+			}
+
 			std::cout << "Done patching!" << std::endl;
 		}
 		else
