@@ -24,6 +24,13 @@ void MainWindow::on_loadRomBtn_clicked()
     if (ndsFactory.loadRomHeader(ui->loadedRomPath->text().toStdString(), romHeader).result)
     {
         pNDSHeader = reinterpret_cast<NDSHeader*>(romHeader.data());
+
+        if (pNDSHeader->DeviceType)//DSi or hybrid ROM
+        {
+            //TODO Show error dialog
+            return;
+        }
+
         populateHeader(pNDSHeader);
         enableExtractionButtons();
     }

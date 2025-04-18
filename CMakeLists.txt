@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.30)
 
+#set(CMAKE_TOOLCHAIN_FILE "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
+
 project(NDSFactory LANGUAGES CXX)
 
 include(FetchContent)
@@ -18,6 +20,8 @@ find_package(Qt6 REQUIRED COMPONENTS
 # Include sanitizers
 include("${CMAKE_SOURCE_DIR}/cmake/sanitizers.cmake")
 
+set(VERSION "V1.3.3")
+
 # Determine the Git commit hash if in a git repository
 if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
   execute_process(
@@ -30,10 +34,11 @@ else()
   set(GIT_COMMIT_HASH "")
 endif()
 
-# Configure the revision header file
+# Configure the version header file
 configure_file(
-  "${CMAKE_SOURCE_DIR}/ui/dialogs/about/revision.h.in"
-  "${CMAKE_SOURCE_DIR}/ui/dialogs/about/revision.h"
+  "${CMAKE_SOURCE_DIR}/ndsfactory/version.h.in"
+  "${CMAKE_SOURCE_DIR}/ndsfactory/version.h"
+    @ONLY
 )
 
 # Collect source and header files
@@ -60,6 +65,9 @@ file(GLOB_RECURSE NDSFACTORY_HEADERS "ndsfactory/*.h")
 set(SOURCES_CLI
     "main_cli.cpp"
     ${NDSFACTORY_SOURCES}
+    "cli/cli.hpp"
+    "cli/unpacker.cpp"
+    "cli/packer.cpp"
 )
 
 set(SOURCES_GUI
@@ -88,7 +96,7 @@ set(FORMS
 # CLI
 add_executable(NDSFactory_CLI ${SOURCES_CLI} ${NDSFACTORY_HEADERS})
 
-#GUI
+# GUI
 # Platform-specific executable creation
 if(APPLE)
     set(MACOSX_BUNDLE_ICON_FILE ndsfactory.icns)

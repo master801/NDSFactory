@@ -298,6 +298,9 @@ NFResult MainWindow::writeRomPadding(const std::string& savePath)
      uint32_t startAddr = extractPackerHeaderTableData(NDSHeaderNames::UsedRomSize).toUInt(nullptr, 16);
      uint32_t size = static_cast<uint32_t>(ndsFactory.getCardSizeInBytes(extractPackerHeaderTableData(NDSHeaderNames::CardSize).toInt())) - startAddr;
 
+     //Buffer overflow prevention
+     if (size > 0x1E848000) return { false, "Cannot write padding due to overflow!\nPlease report this error!" };
+
      return ndsFactory.writePaddingToFile(
                  static_cast<char>('\xff'),
                  savePath,

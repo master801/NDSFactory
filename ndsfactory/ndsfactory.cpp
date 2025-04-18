@@ -28,11 +28,11 @@ NFResult NDSFactory::loadRomHeader(const std::string& romPath, std::vector<char>
     std::ifstream romFile (romPath, std::ios::binary);
     if (!romFile.is_open())
 		return NFResult({ false, "Error opening file: " + romPath });
-    
+
     romHeader.resize(static_cast<unsigned long>(headerSize));
     romFile.read (romHeader.data(), headerSize);
     romFile.close();
-	return NFResult({ true, "" });
+    return NFResult({ true, "" });
 }
 
 NFResult NDSFactory::dumpDataFromFile(const std::string& romPath, const std::string& savePath, uint32_t startAddr, uint32_t size)
