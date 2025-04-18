@@ -63,9 +63,11 @@ file(GLOB_RECURSE NDSFACTORY_SOURCES "ndsfactory/*.cpp")
 file(GLOB_RECURSE NDSFACTORY_HEADERS "ndsfactory/*.h")
 
 set(SOURCES_CLI
+    "cli/argsetup.cpp"
     "main_cli.cpp"
     ${NDSFACTORY_SOURCES}
     "cli/cli.hpp"
+    "cli/info.cpp"
     "cli/unpacker.cpp"
     "cli/packer.cpp"
 )

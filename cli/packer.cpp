@@ -5,7 +5,25 @@
 
 #include "cli.hpp"
 
-int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pathROMOut, int pad, bool trim, bool shouldFixCRC, std::filesystem::path pathHeader, std::filesystem::path pathARM9, std::filesystem::path pathARM7, std::filesystem::path pathFATNameTable, std::filesystem::path pathFAT, std::filesystem::path pathFATData, std::filesystem::path pathARM9Overlay, std::filesystem::path pathARM9OverlayData, std::filesystem::path pathARM7Overlay, std::filesystem::path pathARM7OverlayData, std::filesystem::path pathLogos)
+int packROM(
+	NDSFactory* ndsFactory,
+	const bool silent,
+	std::filesystem::path& pathROMOut,
+	const int pad,
+	const bool trim,
+	const bool shouldFixCRC,
+	std::filesystem::path& pathHeader,
+	std::filesystem::path& pathARM9,
+	std::filesystem::path& pathARM7,
+	std::filesystem::path& pathFATNameTable,
+	std::filesystem::path& pathFAT,
+	std::filesystem::path& pathFATData,
+	std::filesystem::path& pathARM9Overlay,
+	std::filesystem::path& pathARM9OverlayData,
+	std::filesystem::path& pathARM7Overlay,
+	std::filesystem::path& pathARM7OverlayData,
+	std::filesystem::path& pathLogos
+)
 {
 	NFResult nfResult;
 
@@ -14,7 +32,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 	if (!nfResult.result)
 	{
 		std::cout << nfResult.message << std::endl;
-		return 1;
+		return EXIT_CODE_NF_RESULT_BAD;
 	}
 
 	NDSHeader* ndsHeader = reinterpret_cast<NDSHeader*>(romHeaderBuffer.data());
@@ -42,7 +60,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 	if (!nfResult.result)
 	{
 		std::cout << nfResult.message << std::endl;
-		return -1;
+		return EXIT_CODE_NF_RESULT_BAD;
 	}
 
 	//Write header padding
@@ -52,7 +70,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 	if (!nfResult.result)
 	{
 		std::cout << nfResult.message << std::endl;
-		return -1;
+		return EXIT_CODE_NF_RESULT_BAD;
 	}
 	if (!silent) std::cout << "Done" << std::endl << std::endl;
 
@@ -65,7 +83,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 	if (!nfResult.result)
 	{
 		std::cout << nfResult.message << std::endl;
-		return -1;
+		return EXIT_CODE_NF_RESULT_BAD;
 	}
 
 	//Write ARM9 padding
@@ -87,7 +105,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 	if (!nfResult.result)
 	{
 		std::cout << nfResult.message << std::endl;
-		return -1;
+		return EXIT_CODE_NF_RESULT_BAD;
 	}
 	if (!silent) std::cout << "Done" << std::endl << std::endl;
 
@@ -98,12 +116,12 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 		if (pathARM9Overlay.empty())
 		{
 			if (!silent) std::cout << "Header specifies a ARM9 Overlay, but no ARM9 Overlay file was given!" << std::endl;
-			return -1;
+			return EXIT_CODE_NF_RESULT_BAD;
 		}
 		if (pathARM9OverlayData.empty())
 		{
 			if (!silent) std::cout << "Header specifies a ARM9 Overlay, but no ARM9 Overlay Data file was given!" << std::endl;
-			return -1;
+			return EXIT_CODE_NF_RESULT_BAD;
 		}
 
 		//Actually write ARM9 Overlay
@@ -112,7 +130,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 		if (!nfResult.result)
 		{
 			std::cout << nfResult.message << std::endl;
-			return -1;
+			return EXIT_CODE_NF_RESULT_BAD;
 		}
 		if (!silent) std::cout << "Done" << std::endl << std::endl;
 
@@ -124,7 +142,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 		if (!nfResult.result)
 		{
 			std::cout << nfResult.message << std::endl;
-			return -1;
+			return EXIT_CODE_NF_RESULT_BAD;
 		}
 		if (!silent) std::cout << "Done" << std::endl << std::endl;
 	}
@@ -136,7 +154,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 	if (!nfResult.result)
 	{
 		std::cout << nfResult.message << std::endl;
-		return -1;
+		return EXIT_CODE_NF_RESULT_BAD;
 	}
 
 	//Write ARM7 padding
@@ -148,7 +166,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 	if (!nfResult.result)
 	{
 		std::cout << nfResult.message << std::endl;
-		return -1;
+		return EXIT_CODE_NF_RESULT_BAD;
 	}
 	if (!silent) std::cout << "Done" << std::endl << std::endl;
 
@@ -159,12 +177,12 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 		if (pathARM7Overlay.empty())
 		{
 			std::cout << "Header specifies a ARM7 Overlay, but no ARM7 Overlay file was given!" << std::endl << std::endl;
-			return -1;
+			return EXIT_CODE_NF_RESULT_BAD;
 		}
 		if (pathARM7OverlayData.empty())
 		{
 			std::cout << "Header specifies a ARM7 Overlay, but no ARM7 Overlay Data file was given!" << std::endl << std::endl;
-			return -1;
+			return EXIT_CODE_NF_RESULT_BAD;
 		}
 
 		//Actually write ARM7 Overlay
@@ -173,7 +191,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 		if (!nfResult.result)
 		{
 			std::cout << nfResult.message << std::endl;
-			return -1;
+			return EXIT_CODE_NF_RESULT_BAD;
 		}
 		if (!silent) std::cout << "Done" << std::endl << std::endl;
 
@@ -185,7 +203,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 		if (!nfResult.result)
 		{
 			std::cout << nfResult.message << std::endl;
-			return -1;
+			return EXIT_CODE_NF_RESULT_BAD;
 		}
 		if (!silent) std::cout << "Done" << std::endl << std::endl;
 	}
@@ -197,7 +215,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 	if (!nfResult.result)
 	{
 		std::cout << nfResult.message << std::endl;
-		return -1;
+		return EXIT_CODE_NF_RESULT_BAD;
 	}
 
 
@@ -208,7 +226,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 	if (!nfResult.result)
 	{
 		std::cout << nfResult.message << std::endl;
-		return -1;
+		return EXIT_CODE_NF_RESULT_BAD;
 	}
 	if (!silent) std::cout << "Done" << std::endl << std::endl;
 
@@ -219,7 +237,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 	if (!nfResult.result)
 	{
 		std::cout << nfResult.message << std::endl;
-		return -1;
+		return EXIT_CODE_NF_RESULT_BAD;
 	}
 
 	//Write FAT padding
@@ -229,7 +247,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 	if (!nfResult.result)
 	{
 		std::cout << nfResult.message << std::endl;
-		return -1;
+		return EXIT_CODE_NF_RESULT_BAD;
 	}
 	if (!silent) std::cout << "Done" << std::endl << std::endl;
 
@@ -240,7 +258,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 	if (!nfResult.result)
 	{
 		std::cout << nfResult.message << std::endl;
-		return -1;
+		return EXIT_CODE_NF_RESULT_BAD;
 	}
 	if (!silent) std::cout << "Done" << std::endl << std::endl;
 
@@ -253,7 +271,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 	if (!nfResult.result)
 	{
 		std::cout << nfResult.message << std::endl;
-		return -1;
+		return EXIT_CODE_NF_RESULT_BAD;
 	}
 	if (!silent) std::cout << "Done" << std::endl << std::endl;
 
@@ -268,7 +286,7 @@ int packROM(NDSFactory* ndsFactory, const bool silent, std::filesystem::path pat
 		if (!nfResult.result)
 		{
 			std::cout << nfResult.message << std::endl;
-			return -1;
+			return EXIT_CODE_NF_RESULT_BAD;
 		}
 		if (!silent) std::cout << "Done" << std::endl << std::endl;
 	}
